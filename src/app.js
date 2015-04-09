@@ -9,7 +9,9 @@
 'use strict';
 
 import 'babel/polyfill';
-
+import _ from 'lodash';
+import $ from 'jquery';
+import Backbone from 'backbone';
 import React from 'react/addons';
 import FastClick from 'fastclick';
 import emptyFunction from 'react/lib/emptyFunction';
@@ -18,44 +20,110 @@ import Dispatcher from './core/Dispatcher';
 import AppActions from './actions/AppActions';
 import ActionTypes from './constants/ActionTypes';
 
-let path = decodeURI(window.location.pathname);
-let setMetaTag = (name, content) => {
-  // Remove and create a new <meta /> tag in order to make it work
-  // with bookmarks in Safari
-  let elements = document.getElementsByTagName('meta');
-  [].slice.call(elements).forEach((element) => {
-    if (element.getAttribute('name') === name) {
-      element.parentNode.removeChild(element);
+
+var ItemView = React.createClass({
+  render: function() {
+    return (
+      <li class="song-row" key={this.props.data.id}>
+        <img src={this.props.data.img} />
+        {this.props.data.name}
+      </li>
+    );
+  }
+});
+
+var ListView = React.createClass({
+  render: function() {
+    return (
+      <ul class="song-rows">
+        {this.props.data.map(function(result) {
+          return <ItemView data={result} />
+        })}
+      </ul>
+    );
+  }
+});
+
+var TestView = Backbone.View.extend({
+  tagName: 'section',
+
+  events: {
+    "click #sort-it": "sortHandler"
+  },
+
+  initialize: function () {
+    console.log('initialize');
+  },
+
+  sortHandler: function() {
+    if (_.has(this, 'collection') === false) {
+      return false;
     }
-  });
-  let meta = document.createElement('meta');
-  meta.setAttribute('name', name);
-  meta.setAttribute('content', content);
-  document.getElementsByTagName('head')[0].appendChild(meta);
-};
+
+    this.collection.comparator = function(modelA, modelB) {
+      return modelB.get('name').length - modelA.get('name').length;
+    };
+    this.collection.sort();
+  },
+
+  setData: function(data) {
+    this.collection = new Backbone.Collection(data);
+
+    this.listenTo(this.collection, 'sort', this.onRender);
+  },
+
+  render: function() {
+    this.$el.html('<h1>Testing</h1><button id="sort-it">SORT</button><div id="container"></div>');
+
+    this.onRender();
+
+    return this;
+  },
+
+  serializeData: function() {
+    let data = this.collection.toJSON();
+
+    return data;
+  },
+
+  onRender: function() {
+    let data = this.serializeData();
+
+    console.log('data', data)
+
+    React.render(<ListView data={data} />,  document.getElementById('container'));
+  }
+});
+
 
 function run() {
-  // Render the top-level React component
-  let props = {
-    path: path,
-    onSetTitle: (title) => document.title = title,
-    onSetMeta: setMetaTag,
-    onPageNotFound: emptyFunction
-  };
-  let element = React.createElement(App, props);
-  React.render(element, document.body);
 
-  // Update `Application.path` prop when `window.location` is changed
-  Dispatcher.register((payload) => {
-    if (payload.action.actionType === ActionTypes.CHANGE_LOCATION) {
-      element = React.cloneElement(element, {path: payload.action.path});
-      React.render(element, document.body);
-    }
-  });
+  var data = [
+    {
+      id: 0,
+      name: 'c',
+      img: 'https://s3.amazonaws.com/muzooka-prod/bands/995/avatar.jpg',
+
+    },
+    {
+      id: 1,
+      name: 'aaa',
+      img: 'https://s3.amazonaws.com/muzooka-prod/bands/995/avatar.jpg'
+    },
+    {
+      id: 2,
+      name: 'bb',
+      img: 'https://s3.amazonaws.com/muzooka-prod/bands/995/avatar.jpg'
+    },
+  ]
+
+  var testView = new TestView;
+  testView.setData(data);
+
+  $('body').append(testView.$el);
+  testView.render();
 }
 
-// Run the application when both DOM is ready
-// and page content is loaded
 Promise.all([
   new Promise((resolve) => {
     if (window.addEventListener) {
@@ -63,6 +131,5 @@ Promise.all([
     } else {
       window.attachEvent('onload', resolve);
     }
-  }).then(() => FastClick.attach(document.body)),
-  new Promise((resolve) => AppActions.loadPage(path, resolve))
+  })
 ]).then(run);
